@@ -21,6 +21,7 @@ interface MuscleLabel {
   muscle: MuscleGroup;
   side: "left" | "right";
   top: string;
+  left?: string;
   fontSize?: number;
   lineLength?: number;
   lineShape?: "straight" | "curved";
@@ -86,9 +87,17 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
       if (draggingLabel && containerRef.current) {
         const container = containerRef.current;
         const rect = container.getBoundingClientRect();
+        
+        // Calcular posição vertical
         const newTop = ((e.clientY - rect.top - dragOffset.y) / rect.height) * 100;
         
-        handleUpdateLabel({ top: `${Math.max(0, Math.min(100, newTop))}%` });
+        // Calcular posição horizontal
+        const newLeft = ((e.clientX - rect.left - dragOffset.x) / rect.width) * 100;
+        
+        handleUpdateLabel({ 
+          top: `${Math.max(0, Math.min(100, newTop))}%`,
+          left: `${Math.max(0, Math.min(100, newLeft))}%`,
+        });
       }
     };
 
@@ -261,11 +270,15 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
               <div
                 key={label.muscle}
                 className={`absolute pointer-events-auto ${
-                  label.side === "left" ? "left-0" : "right-0"
-                } ${editMode && !isEditing ? "cursor-move" : "cursor-pointer"} ${
+                  editMode && !isEditing ? "cursor-move" : "cursor-pointer"
+                } ${
                   isDragging ? "opacity-70" : ""
                 } group transition-opacity duration-150`}
-                style={{ top: label.top }}
+                style={{ 
+                  top: label.top,
+                  left: label.left || (label.side === "left" ? "0" : "auto"),
+                  right: label.left ? "auto" : (label.side === "right" ? "0" : "auto"),
+                }}
                 data-muscle-label
                 onMouseDown={(e) => editMode ? handleMouseDown(e, label) : undefined}
               >
@@ -395,12 +408,26 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
 
                           <div className="space-y-2">
                             <Label className="text-xs">Posição (%)</Label>
-                            <Input
-                              value={editingLabel.top}
-                              onChange={(e) => handleUpdateLabel({ top: e.target.value })}
-                              placeholder="Ex: 50%"
-                              className="h-8 text-sm"
-                            />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs">Top</Label>
+                                <Input
+                                  value={editingLabel.top}
+                                  onChange={(e) => handleUpdateLabel({ top: e.target.value })}
+                                  placeholder="Ex: 50%"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Left</Label>
+                                <Input
+                                  value={editingLabel.left || "0%"}
+                                  onChange={(e) => handleUpdateLabel({ left: e.target.value })}
+                                  placeholder="Ex: 25%"
+                                  className="h-8 text-sm"
+                                />
+                              </div>
+                            </div>
                           </div>
 
                           <div className="flex items-center space-x-2">
