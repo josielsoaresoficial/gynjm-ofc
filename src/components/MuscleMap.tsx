@@ -1,19 +1,14 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MuscleGroup } from "@/pages/Exercises";
 import bodyFront from "@/assets/body-front.png";
 import bodyBack from "@/assets/body-back.png";
 import { Button } from "@/components/ui/button";
-import { Settings, Plus, Trash2, Save } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Settings, Plus, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Card } from "@/components/ui/card";
 
 interface MuscleMapProps {
   view: "front" | "back";
@@ -62,28 +57,43 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
   const [frontLabels, setFrontLabels] = useState<MuscleLabel[]>(defaultFrontLabels);
   const [backLabels, setBackLabels] = useState<MuscleLabel[]>(defaultBackLabels);
   const [editingLabel, setEditingLabel] = useState<MuscleLabel | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const editPanelRef = useRef<HTMLDivElement>(null);
 
   const labels = view === "front" ? frontLabels : backLabels;
   const setLabels = view === "front" ? setFrontLabels : setBackLabels;
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (editPanelRef.current && !editPanelRef.current.contains(event.target as Node)) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('[data-muscle-label]')) {
+          setEditingLabel(null);
+        }
+      }
+    };
+
+    if (editingLabel && editMode) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [editingLabel, editMode]);
+
   const handleEditLabel = (label: MuscleLabel) => {
     if (editMode) {
-      setEditingLabel(label);
-      setIsEditDialogOpen(true);
+      setEditingLabel(editingLabel?.muscle === label.muscle ? null : label);
     } else {
       onMuscleSelect(label.muscle);
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleUpdateLabel = (updates: Partial<MuscleLabel>) => {
     if (editingLabel) {
+      const updatedLabel = { ...editingLabel, ...updates };
+      setEditingLabel(updatedLabel);
       const updatedLabels = labels.map(l => 
-        l.muscle === editingLabel.muscle ? editingLabel : l
+        l.muscle === editingLabel.muscle ? updatedLabel : l
       );
       setLabels(updatedLabels);
-      setIsEditDialogOpen(false);
-      setEditingLabel(null);
     }
   };
 
@@ -100,12 +110,14 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
       hideLabel: false,
     };
     setLabels([...labels, newLabel]);
+    setEditingLabel(newLabel);
   };
 
-  const handleRemoveLabel = (muscle: MuscleGroup) => {
-    setLabels(labels.filter(l => l.muscle !== muscle));
-    setIsEditDialogOpen(false);
-    setEditingLabel(null);
+  const handleRemoveLabel = () => {
+    if (editingLabel) {
+      setLabels(labels.filter(l => l.muscle !== editingLabel.muscle));
+      setEditingLabel(null);
+    }
   };
 
   const renderLine = (label: MuscleLabel, isSelected: boolean, isHovered: boolean) => {
@@ -197,6 +209,7 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
         <div className="absolute inset-0 pointer-events-none">
           {labels.map((label) => {
             const isSelected = selectedMuscle === label.muscle;
+            const isEditing = editingLabel?.muscle === label.muscle;
             
             return (
               <div
@@ -205,152 +218,169 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
                   label.side === "left" ? "left-0" : "right-0"
                 } cursor-pointer group`}
                 style={{ top: label.top }}
-                onClick={() => handleEditLabel(label)}
+                data-muscle-label
               >
                 {/* Label Container */}
-                <div className={`flex items-center ${label.side === "left" ? "flex-row" : "flex-row-reverse"} gap-1`}>
+                <div className={`flex items-center ${label.side === "left" ? "flex-row" : "flex-row-reverse"} gap-1 relative`}>
                   {/* Label Text */}
-                  {!label.hideLabel && (
-                    <div
-                      className={`font-medium text-black px-2 py-1 whitespace-nowrap ${
-                        label.side === "left" ? "text-left" : "text-right"
-                      } ${
-                        isSelected
-                          ? "font-bold text-[#FF9F66]"
-                          : "group-hover:font-semibold group-hover:text-[#FF9F66]"
-                      } transition-all duration-200`}
-                      style={{ fontSize: `${label.fontSize || 14}px` }}
+                  <div onClick={() => handleEditLabel(label)}>
+                    {!label.hideLabel && (
+                      <div
+                        className={`font-medium text-black px-2 py-1 whitespace-nowrap ${
+                          label.side === "left" ? "text-left" : "text-right"
+                        } ${
+                          isSelected
+                            ? "font-bold text-[#FF9F66]"
+                            : "group-hover:font-semibold group-hover:text-[#FF9F66]"
+                        } ${isEditing ? "ring-2 ring-primary rounded" : ""} transition-all duration-200`}
+                        style={{ fontSize: `${label.fontSize || 14}px` }}
+                      >
+                        {label.name}
+                      </div>
+                    )}
+
+                    {/* Connector Line and Point */}
+                    {renderLine(label, isSelected, false)}
+                  </div>
+
+                  {/* Inline Edit Panel */}
+                  {isEditing && editMode && (
+                    <div 
+                      ref={editPanelRef}
+                      className={`absolute ${
+                        label.side === "left" ? "left-full ml-2" : "right-full mr-2"
+                      } top-0 z-50 pointer-events-auto`}
                     >
-                      {label.name}
+                      <Card className="p-3 shadow-lg bg-background border-2 border-primary w-64 max-h-[400px] overflow-y-auto">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-sm">Editar Label</h4>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => setEditingLabel(null)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">Nome</Label>
+                            <Input
+                              value={editingLabel.name}
+                              onChange={(e) => handleUpdateLabel({ name: e.target.value })}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Texto (px)</Label>
+                              <Input
+                                type="number"
+                                value={editingLabel.fontSize || 14}
+                                onChange={(e) => handleUpdateLabel({ fontSize: parseInt(e.target.value) })}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label className="text-xs">Linha (px)</Label>
+                              <Input
+                                type="number"
+                                value={editingLabel.lineLength || 40}
+                                onChange={(e) => handleUpdateLabel({ lineLength: parseInt(e.target.value) })}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">Forma</Label>
+                            <Select
+                              value={editingLabel.lineShape || "straight"}
+                              onValueChange={(value: "straight" | "curved") => handleUpdateLabel({ lineShape: value })}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="straight">Reta</SelectItem>
+                                <SelectItem value="curved">Curva</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">Ponto</Label>
+                            <Select
+                              value={editingLabel.dotPosition || "end"}
+                              onValueChange={(value: "start" | "end") => handleUpdateLabel({ dotPosition: value })}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="start">Início</SelectItem>
+                                <SelectItem value="end">Fim</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">Lado</Label>
+                            <Select
+                              value={editingLabel.side}
+                              onValueChange={(value: "left" | "right") => handleUpdateLabel({ side: value })}
+                            >
+                              <SelectTrigger className="h-8 text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="left">Esquerda</SelectItem>
+                                <SelectItem value="right">Direita</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-xs">Posição (%)</Label>
+                            <Input
+                              value={editingLabel.top}
+                              onChange={(e) => handleUpdateLabel({ top: e.target.value })}
+                              placeholder="Ex: 50%"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={editingLabel.hideLabel || false}
+                              onCheckedChange={(checked) => handleUpdateLabel({ hideLabel: checked })}
+                            />
+                            <Label className="text-xs">Ocultar texto</Label>
+                          </div>
+
+                          <Button 
+                            variant="destructive" 
+                            onClick={handleRemoveLabel}
+                            className="w-full h-8 text-sm"
+                            size="sm"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Remover
+                          </Button>
+                        </div>
+                      </Card>
                     </div>
                   )}
-
-                  {/* Connector Line and Point */}
-                  {renderLine(label, isSelected, false)}
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Label</DialogTitle>
-          </DialogHeader>
-          {editingLabel && (
-            <div className="space-y-4">
-              <div>
-                <Label>Nome</Label>
-                <Input
-                  value={editingLabel.name}
-                  onChange={(e) => setEditingLabel({ ...editingLabel, name: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label>Tamanho do Texto (px)</Label>
-                <Input
-                  type="number"
-                  value={editingLabel.fontSize || 14}
-                  onChange={(e) => setEditingLabel({ ...editingLabel, fontSize: parseInt(e.target.value) })}
-                />
-              </div>
-
-              <div>
-                <Label>Comprimento da Linha (px)</Label>
-                <Input
-                  type="number"
-                  value={editingLabel.lineLength || 40}
-                  onChange={(e) => setEditingLabel({ ...editingLabel, lineLength: parseInt(e.target.value) })}
-                />
-              </div>
-
-              <div>
-                <Label>Forma da Linha</Label>
-                <Select
-                  value={editingLabel.lineShape || "straight"}
-                  onValueChange={(value: "straight" | "curved") => setEditingLabel({ ...editingLabel, lineShape: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="straight">Reta</SelectItem>
-                    <SelectItem value="curved">Curva</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Posição do Ponto</Label>
-                <Select
-                  value={editingLabel.dotPosition || "end"}
-                  onValueChange={(value: "start" | "end") => setEditingLabel({ ...editingLabel, dotPosition: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="start">Início</SelectItem>
-                    <SelectItem value="end">Fim</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Lado</Label>
-                <Select
-                  value={editingLabel.side}
-                  onValueChange={(value: "left" | "right") => setEditingLabel({ ...editingLabel, side: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="left">Esquerda</SelectItem>
-                    <SelectItem value="right">Direita</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Posição Vertical (%)</Label>
-                <Input
-                  value={editingLabel.top}
-                  onChange={(e) => setEditingLabel({ ...editingLabel, top: e.target.value })}
-                  placeholder="Ex: 50%"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={editingLabel.hideLabel || false}
-                  onCheckedChange={(checked) => setEditingLabel({ ...editingLabel, hideLabel: checked })}
-                />
-                <Label>Ocultar Texto (apenas linha)</Label>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button onClick={handleSaveEdit} className="flex-1">
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar
-                </Button>
-                <Button 
-                  variant="destructive" 
-                  onClick={() => handleRemoveLabel(editingLabel.muscle)}
-                  className="flex-1"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Remover
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
