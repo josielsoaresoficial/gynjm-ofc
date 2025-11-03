@@ -57,7 +57,10 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
   const [frontLabels, setFrontLabels] = useState<MuscleLabel[]>(defaultFrontLabels);
   const [backLabels, setBackLabels] = useState<MuscleLabel[]>(defaultBackLabels);
   const [editingLabel, setEditingLabel] = useState<MuscleLabel | null>(null);
+  const [draggingLabel, setDraggingLabel] = useState<MuscleLabel | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const editPanelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const labels = view === "front" ? frontLabels : backLabels;
   const setLabels = view === "front" ? setFrontLabels : setBackLabels;
@@ -77,6 +80,45 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [editingLabel, editMode]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (draggingLabel && containerRef.current) {
+        const container = containerRef.current;
+        const rect = container.getBoundingClientRect();
+        const newTop = ((e.clientY - rect.top - dragOffset.y) / rect.height) * 100;
+        
+        handleUpdateLabel({ top: `${Math.max(0, Math.min(100, newTop))}%` });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setDraggingLabel(null);
+    };
+
+    if (draggingLabel) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [draggingLabel, dragOffset]);
+
+  const handleMouseDown = (e: React.MouseEvent, label: MuscleLabel) => {
+    if (editMode && !editingLabel) {
+      e.preventDefault();
+      const target = e.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+      setDraggingLabel(label);
+      setEditingLabel(label);
+    }
+  };
 
   const handleEditLabel = (label: MuscleLabel) => {
     if (editMode) {
@@ -194,7 +236,10 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
       )}
 
       {/* Container with fixed max-width for consistent sizing */}
-      <div className="relative w-full max-w-[600px] flex items-center justify-center">
+      <div 
+        ref={containerRef}
+        className="relative w-full max-w-[600px] flex items-center justify-center"
+      >
         {/* Body Image - Centered */}
         <div className="relative flex items-center justify-center transition-all duration-300 ease-in-out">
           <img
@@ -210,23 +255,27 @@ export function MuscleMap({ view, selectedMuscle, onMuscleSelect }: MuscleMapPro
           {labels.map((label) => {
             const isSelected = selectedMuscle === label.muscle;
             const isEditing = editingLabel?.muscle === label.muscle;
+            const isDragging = draggingLabel?.muscle === label.muscle;
             
             return (
               <div
                 key={label.muscle}
                 className={`absolute pointer-events-auto ${
                   label.side === "left" ? "left-0" : "right-0"
-                } cursor-pointer group`}
+                } ${editMode && !isEditing ? "cursor-move" : "cursor-pointer"} ${
+                  isDragging ? "opacity-70" : ""
+                } group transition-opacity duration-150`}
                 style={{ top: label.top }}
                 data-muscle-label
+                onMouseDown={(e) => editMode ? handleMouseDown(e, label) : undefined}
               >
                 {/* Label Container */}
                 <div className={`flex items-center ${label.side === "left" ? "flex-row" : "flex-row-reverse"} gap-1 relative`}>
                   {/* Label Text */}
-                  <div onClick={() => handleEditLabel(label)}>
+                  <div onClick={() => !isDragging && handleEditLabel(label)}>
                     {!label.hideLabel && (
                       <div
-                        className={`font-medium text-black px-2 py-1 whitespace-nowrap ${
+                        className={`font-medium text-black px-2 py-1 whitespace-nowrap select-none ${
                           label.side === "left" ? "text-left" : "text-right"
                         } ${
                           isSelected
