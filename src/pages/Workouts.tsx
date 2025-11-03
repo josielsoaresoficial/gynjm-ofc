@@ -3,11 +3,20 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Timer, Flame, Trophy } from "lucide-react";
+import { Search, Timer, Flame, Trophy, RotateCw } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { WorkoutCard } from "@/components/WorkoutCard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { MuscleMap } from "@/components/MuscleMap";
+import { ExerciseList } from "@/components/ExerciseList";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { MuscleGroup } from "@/pages/Exercises";
 
 interface Workout {
   id: string;
@@ -38,6 +47,9 @@ export default function Workouts() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | null>(null);
+  const [view, setView] = useState<"front" | "back">("front");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     loadWorkouts();
@@ -83,6 +95,16 @@ export default function Workouts() {
     return matchesSearch && matchesCategory;
   });
 
+  const handleRotate = () => {
+    setView(prev => prev === "front" ? "back" : "front");
+    setSelectedMuscle(null);
+  };
+
+  const handleMuscleSelect = (muscle: MuscleGroup) => {
+    setSelectedMuscle(muscle);
+    setIsDialogOpen(true);
+  };
+
   return (
     <Layout>
       <div className="w-full mx-auto px-4 py-6 max-w-7xl">
@@ -120,6 +142,36 @@ export default function Workouts() {
             </Button>
           ))}
         </div>
+
+        {/* Muscle Map Section */}
+        <Card className="mb-8 bg-gradient-to-br from-primary/5 to-accent/5">
+          <CardHeader>
+            <CardTitle>Escolha um Músculo</CardTitle>
+            <CardDescription>
+              Clique em um músculo para ver exercícios específicos
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="relative">
+              <MuscleMap 
+                view={view}
+                selectedMuscle={selectedMuscle}
+                onMuscleSelect={handleMuscleSelect}
+              />
+              
+              {/* Rotate Button */}
+              <div className="flex justify-end mt-4">
+                <Button
+                  onClick={handleRotate}
+                  className="bg-primary hover:bg-primary/90 rounded-full px-6 py-3 shadow-lg transition-all duration-300 ease-in-out flex items-center gap-2"
+                >
+                  <RotateCw className="w-5 h-5" />
+                  <span className="font-medium">Rotacionar</span>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Workout History */}
         {workoutHistory.length > 0 && (
@@ -212,6 +264,23 @@ export default function Workouts() {
             ))}
           </div>
         )}
+
+        {/* Exercise Modal */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold">
+                Exercícios - {selectedMuscle}
+              </DialogTitle>
+            </DialogHeader>
+            {selectedMuscle && (
+              <ExerciseList 
+                muscle={selectedMuscle}
+                searchQuery=""
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
