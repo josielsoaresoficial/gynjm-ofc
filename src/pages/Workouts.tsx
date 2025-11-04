@@ -145,13 +145,7 @@ export default function Workouts() {
 
         {/* Muscle Map Section */}
         <Card className="mb-8 bg-gradient-to-br from-primary/5 to-accent/5">
-          <CardHeader>
-            <CardTitle>Escolha um Músculo</CardTitle>
-            <CardDescription>
-              Clique em um músculo para ver exercícios específicos
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div className="relative">
               <MuscleMap 
                 view={view}
