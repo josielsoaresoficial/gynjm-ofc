@@ -143,30 +143,6 @@ export default function Workouts() {
           ))}
         </div>
 
-        {/* Muscle Map Section */}
-        <Card className="mb-8 bg-gradient-to-br from-primary/5 to-accent/5">
-          <CardContent className="pt-6">
-            <div className="relative">
-              <MuscleMap 
-                view={view}
-                selectedMuscle={selectedMuscle}
-                onMuscleSelect={handleMuscleSelect}
-              />
-              
-              {/* Rotate Button */}
-              <div className="flex justify-end mt-4">
-                <Button
-                  onClick={handleRotate}
-                  className="bg-primary hover:bg-primary/90 rounded-full px-6 py-3 shadow-lg transition-all duration-300 ease-in-out flex items-center gap-2"
-                >
-                  <RotateCw className="w-5 h-5" />
-                  <span className="font-medium">Rotacionar</span>
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Workout History */}
         {workoutHistory.length > 0 && (
           <Card className="mb-8 bg-gradient-to-br from-primary/5 to-accent/5">
