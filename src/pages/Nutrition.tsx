@@ -3,13 +3,21 @@ import { GymCard } from "@/components/GymCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Camera, Upload, Utensils, Target, Zap, Plus, Clock, TrendingUp, X } from "lucide-react";
+import { Camera, Upload, Utensils, Target, Zap, Plus, Clock, TrendingUp, X, ChefHat } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import NutriAI from "@/components/NutriAI";
 import { NutritionGoalsDialog } from "@/components/NutritionGoalsDialog";
 import { FoodPhotoAnalyzer } from "@/components/FoodPhotoAnalyzer";
+import { 
+  Dialog,
+  DialogContent, 
+  DialogDescription,
+  DialogHeader, 
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const Nutrition = () => {
   const [selectedMeal, setSelectedMeal] = useState<string | null>(null);
@@ -19,6 +27,10 @@ const Nutrition = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [savedMeals, setSavedMeals] = useState<any[]>([]);
   const [isLoadingMeals, setIsLoadingMeals] = useState(false);
+  const [showRecipesDialog, setShowRecipesDialog] = useState(false);
+  const [showWeeklyReportDialog, setShowWeeklyReportDialog] = useState(false);
+  const [showGoalsDialog, setShowGoalsDialog] = useState(false);
+  const [weeklyMeals, setWeeklyMeals] = useState<any[]>([]);
   const [nutritionGoals, setNutritionGoals] = useState({
     calories: 2200,
     protein: 120,
@@ -341,6 +353,99 @@ const Nutrition = () => {
     loadNutritionGoals();
   };
 
+  // Carregar refeições da semana para o relatório
+  const loadWeeklyMeals = async () => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      
+      if (!session?.session?.user) {
+        return;
+      }
+      
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      weekAgo.setHours(0, 0, 0, 0);
+      
+      const { data, error } = await (supabase as any)
+        .from('meals')
+        .select('*')
+        .eq('user_id', session.session.user.id)
+        .gte('meal_time', weekAgo.toISOString())
+        .order('meal_time', { ascending: false });
+      
+      if (!error && data) {
+        setWeeklyMeals(data);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar refeições semanais:", error);
+    }
+  };
+
+  // Handler para adicionar próxima refeição
+  const handleAddNextMeal = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    
+    let mealType = "";
+    if (hour < 10) {
+      mealType = "Café da Manhã";
+    } else if (hour < 13) {
+      mealType = "Almoço";
+    } else if (hour < 16) {
+      mealType = "Lanche da Tarde";
+    } else if (hour < 20) {
+      mealType = "Jantar";
+    } else {
+      mealType = "Ceia";
+    }
+    
+    toast({
+      title: `Hora de registrar: ${mealType}`,
+      description: "Tire uma foto da sua refeição para análise automática!",
+    });
+    
+    // Scroll para a seção de análise
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Handler para receitas sugeridas
+  const handleShowRecipes = () => {
+    setShowRecipesDialog(true);
+  };
+
+  // Handler para ajustar metas
+  const handleAdjustGoals = () => {
+    setShowGoalsDialog(true);
+  };
+
+  // Handler para relatório semanal
+  const handleWeeklyReport = async () => {
+    await loadWeeklyMeals();
+    setShowWeeklyReportDialog(true);
+  };
+
+  // Calcular média semanal
+  const calculateWeeklyAverage = () => {
+    if (weeklyMeals.length === 0) return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    
+    const totals = weeklyMeals.reduce((acc, meal) => ({
+      calories: acc.calories + (Number(meal.calories) || 0),
+      protein: acc.protein + (Number(meal.protein) || 0),
+      carbs: acc.carbs + (Number(meal.carbs) || 0),
+      fat: acc.fat + (Number(meal.fat) || 0)
+    }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    
+    const days = 7;
+    return {
+      calories: Math.round(totals.calories / days),
+      protein: Math.round((totals.protein / days) * 10) / 10,
+      carbs: Math.round((totals.carbs / days) * 10) / 10,
+      fat: Math.round((totals.fat / days) * 10) / 10
+    };
+  };
+
+  const weeklyAverage = calculateWeeklyAverage();
+
   return (
     <Layout>
       <div className="w-full px-4 py-6 space-y-6 max-w-7xl mx-auto">
@@ -490,19 +595,19 @@ const Nutrition = () => {
             description="Adicione refeições rapidamente"
           >
             <div className="space-y-3">
-              <Button variant="nutrition" className="w-full">
+              <Button variant="nutrition" className="w-full" onClick={handleAddNextMeal}>
                 <Plus className="w-4 h-4" />
                 Próxima Refeição
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleShowRecipes}>
                 <Utensils className="w-4 h-4" />
                 Receitas Sugeridas
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleAdjustGoals}>
                 <Target className="w-4 h-4" />
                 Ajustar Metas
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleWeeklyReport}>
                 <TrendingUp className="w-4 h-4" />
                 Relatório Semanal
               </Button>
@@ -770,7 +875,116 @@ const Nutrition = () => {
         )}
       </div>
       
-      {/* Food Photo Analyzer Component */}
+      {/* Recipes Dialog */}
+      <Dialog open={showRecipesDialog} onOpenChange={setShowRecipesDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ChefHat className="w-5 h-5 text-secondary" />
+              Receitas Personalizadas
+            </DialogTitle>
+            <DialogDescription>
+              Sugestões baseadas nas suas metas e preferências
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Sugestões de receitas */}
+          <div className="grid md:grid-cols-2 gap-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Salada Proteica</CardTitle>
+                <CardDescription>Perfeita para atingir sua meta de proteína</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>380 kcal • 35g proteína</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Smoothie Pós-Treino</CardTitle>
+                <CardDescription>Ideal para recuperação muscular</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>320 kcal • 28g proteína</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Salmão Grelhado</CardTitle>
+                <CardDescription>Rico em ômega-3 e proteínas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>420 kcal • 38g proteína</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Omelete de Claras</CardTitle>
+                <CardDescription>Baixo em gordura, alto em proteína</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>250 kcal • 30g proteína</p>
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Weekly Report Dialog */}
+      <Dialog open={showWeeklyReportDialog} onOpenChange={setShowWeeklyReportDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-secondary" />
+              Relatório Semanal
+            </DialogTitle>
+            <DialogDescription>
+              Resumo dos últimos 7 dias
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4 space-y-4">
+            <div className="flex justify-between">
+              <span className="font-semibold">Calorias Médias</span>
+              <span>{weeklyAverage.calories} kcal</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-semibold">Proteínas Médias</span>
+              <span>{weeklyAverage.protein} g</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-semibold">Carboidratos Médios</span>
+              <span>{weeklyAverage.carbs} g</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-semibold">Gorduras Médias</span>
+              <span>{weeklyAverage.fat} g</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Goals Dialog */}
+      <Dialog open={showGoalsDialog} onOpenChange={setShowGoalsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajustar Metas Nutricionais</DialogTitle>
+            <DialogDescription>
+              Personalize suas metas diárias de nutrientes
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <NutritionGoalsDialog 
+              currentGoals={nutritionGoals}
+              onGoalsUpdated={() => {
+                handleGoalsUpdated();
+                setShowGoalsDialog(false);
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+      
       <div className="max-w-7xl mx-auto px-4 pb-6">
         <FoodPhotoAnalyzer />
       </div>
